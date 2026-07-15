@@ -1,0 +1,7 @@
+embedding_model: BAAI/bge-m3
+reranker_model: BAAI/bge-reranker-v2-m3
+vector_store: lancedb
+languages: [en, de, fr]
+generation_model: gemini-2.5-flash   # verify current model id in AI Studio
+top_k: 20
+rerank_top_k: 5
