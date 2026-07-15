@@ -1,1 +1,1 @@
-# -crosslingual-agentic-rag
+# crosslingual-agentic-rag
