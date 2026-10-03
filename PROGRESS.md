@@ -25,9 +25,15 @@
 - Results: none yet (no eval scripts exist)
 - Blockers: waiting on IMS server specs (GPU/VRAM, scheduler, storage, Java, internet on nodes, Docker/Apptainer);
   servers now also need Python 3.12+, and the `gpu` extra is locked but has never been installed
+- Done: added FlagEmbedding to the `gpu` extra. The bge-m3 model card and FlagEmbedding docs give sparse
+  (lexical weights) output only via BGEM3FlagModel; sentence-transformers covers dense only.
+  To verify on the first GPU install.
+- Done: .gitignore covers /data/, /cache/ and /indexes/
+- Decision: the Gemini model id is settled in v0.2 when the API is wired up; from then on every result file
+  records the exact model id
+- Finding: apple/mkqa and masakhane/afriqa are script-based Hub repos, which datasets 5.x refuses to load;
+  both load from the `refs/convert/parquet` revision (MKQA: 10,000 rows; AfriQA swa: 415 train / 417 dev / 302 test)
 - Next: data loaders for MKQA (en/de/fr) and AfriQA (sw)
 
 ## Open questions for chat review
 - (add anything you want to discuss in the Claude chat here)
-- Does sentence-transformers expose bge-m3's sparse output, or does the `gpu` extra need FlagEmbedding?
-- config.yaml still carries "verify current model id" on generation_model (gemini-2.5-flash)

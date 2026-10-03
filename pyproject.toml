@@ -16,6 +16,7 @@ dependencies = [
 # Heavy ML stack for the Linux GPU servers only: `uv sync --extra gpu`.
 # Current PyTorch has no Intel-Mac builds, so these must never be required locally.
 gpu = [
+    "flagembedding>=1.4.2 ; sys_platform == 'linux'",
     "pyserini>=2.4.0 ; sys_platform == 'linux'",
     "sentence-transformers>=6.1.0 ; sys_platform == 'linux'",
     "torch>=2.14.1 ; sys_platform == 'linux'",

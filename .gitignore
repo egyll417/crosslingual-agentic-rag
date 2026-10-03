@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project artifacts: raw/processed datasets, LLM/API call cache, retrieval indexes.
+# Anchored to the repo root so a package such as src/crag/data is not ignored.
+/data/
+/cache/
+/indexes/
