@@ -1,0 +1,42 @@
+[project]
+name = "crosslingual-agentic-rag"
+version = "0.0.1"
+description = "Cross-lingual retrieval-augmented QA (en/de/fr/sw queries, English knowledge base) with an evaluation harness"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "datasets>=5.0.1",
+    "google-genai>=2.28.0",
+    "langgraph>=1.2.12",
+    "python-dotenv>=1.2.4",
+    "qdrant-client>=1.19.1",
+]
+
+[project.optional-dependencies]
+# Heavy ML stack for the Linux GPU servers only: `uv sync --extra gpu`.
+# Current PyTorch has no Intel-Mac builds, so these must never be required locally.
+gpu = [
+    "pyserini>=2.4.0 ; sys_platform == 'linux'",
+    "sentence-transformers>=6.1.0 ; sys_platform == 'linux'",
+    "torch>=2.14.1 ; sys_platform == 'linux'",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crag"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+]

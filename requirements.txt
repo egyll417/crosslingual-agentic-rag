@@ -1,7 +1,0 @@
-sentence-transformers
-lancedb
-langgraph
-ragas
-google-genai
-datasets
-python-dotenv
