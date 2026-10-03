@@ -40,6 +40,12 @@ is English.
 - The 500 selected `example_id`s are frozen in `configs/mkqa_sample_ids.txt` (one per line, sorted
   as strings), so the evaluation set is fixed in git. They were drawn with seed 0 from revision
   `d7a2b9681ece319c53f8c2fe850eb4b487cec912` of the parquet branch.
+- Decided, not implemented as of 2026-10-03: that file, not the seed, defines the evaluation set.
+  The loader reads the ids, selects exactly those rows in file order, and fails if the file has
+  duplicates, an id is missing from the dataset, or a listed question is no longer eligible.
+  `select_parallel_sample` is kept only to regenerate the file behind an explicit command.
+  Rejected: sampling at build time and asserting the result equals the file, which keeps two
+  sources of truth and depends on `random.sample` behaving the same on every Python version.
 
 ### AfriQA (sw)
 - Swahili test split, 302 questions.
@@ -47,6 +53,19 @@ is English.
   dataset's human English translation (`lang: en`). This is the Swahili control: the same
   questions asked in sw and in en.
 - Machine-translated English is not produced by the loader. It comes later, at retrieval time.
+- The parquet rows carry no id, so a question's `parallel_id` is its position in the pinned
+  revision, e.g. `afriqa-swa-test-0007`. Rejected: a hash of the Swahili question text, which
+  survives re-ordering but is opaque, and the revision pin already fixes the order.
+- AfriQA has no answer types, so `answer_type` is empty on these records.
+- Answers are stored as a stringified list (`"['Webuye']"`), and an unescaped apostrophe makes the
+  string unparseable. Decided, not implemented as of 2026-10-03: recover only a single-answer
+  `['...']` wrapper, and fail the build if the inside looks like several answers.
+- Decided, not implemented as of 2026-10-03: a question is dropped entirely (both its sw and en
+  records) if its English gold answer is longer than 10 words (11 or more, counted by splitting
+  on whitespace). This is the same reasoning as
+  MKQA's `long_answer` exclusion: a sentence-length gold answer cannot be string-matched. The
+  build reports how many questions this removes, and the manifest lists each excluded id with its
+  reason.
 - The AfriQA questions are a different set from the MKQA sample, so sw vs. de/fr differences mix
   language with question difficulty. The sw vs. en control above is the clean comparison.
 

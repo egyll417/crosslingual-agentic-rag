@@ -32,3 +32,4 @@ Also an Optional Research Module project at IMS, University of Stuttgart.
 - Start of session: read PROGRESS.md, summarise the current state in 3 lines, propose the next step.
 - When I say "wrap up": update PROGRESS.md (done / results / next / blockers / open questions),
   propose a commit message, then commit and push after I confirm.
+- "Wrap up and push" means commit and push without asking me to confirm.
