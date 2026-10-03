@@ -2,8 +2,8 @@
 
 ## Current state
 - Milestone: v0.1 (target 2026-10-25)
-- Status: scaffold only; tooling being set up
-- Next step: migrate requirements.txt to uv (pyproject.toml); data loaders for MKQA (en/de/fr) and AfriQA (sw)
+- Status: scaffold plus tooling; uv project with ruff and pytest in place, no pipeline code yet
+- Next step: data loaders for MKQA (en/de/fr) and AfriQA (sw)
 
 ## Milestones
 - [ ] v0.1 (Oct 25) — data loaders, passage pool, BM25 + dense recall@k for en/de/fr/sw
@@ -14,9 +14,20 @@
 ## Log
 ### 2026-10-03
 - Done: added CLAUDE.md and PROGRESS.md; set scope (en/de/fr/sw queries, English knowledge base); vector store set to Qdrant
-- Results: none yet
-- Blockers: waiting on IMS server specs (GPU/VRAM, scheduler, storage, Java, internet on nodes, Docker/Apptainer)
-- Next: uv migration, then data loaders
+- Done: configs/config.yaml aligned with the stack (vector_store: qdrant, languages: en/de/fr/sw)
+- Done: migrated requirements.txt to uv (pyproject.toml, uv.lock, Python 3.12 pinned in .python-version)
+  - core (local, Intel Mac): datasets, google-genai, langgraph, python-dotenv, qdrant-client
+  - `gpu` extra, Linux only: torch, sentence-transformers, pyserini (`uv sync --extra gpu`)
+  - `dev` group: ruff, pytest; import smoke tests for the crag subpackages
+  - dropped lancedb and ragas (ragas 0.4.3 fails to import against langchain-community 0.4.2)
+- Decision: no ragas; the LLM judge will be our own implementation
+- Decision: requires Python >=3.12, so the lock holds a single pyserini version (2.4.0)
+- Results: none yet (no eval scripts exist)
+- Blockers: waiting on IMS server specs (GPU/VRAM, scheduler, storage, Java, internet on nodes, Docker/Apptainer);
+  servers now also need Python 3.12+, and the `gpu` extra is locked but has never been installed
+- Next: data loaders for MKQA (en/de/fr) and AfriQA (sw)
 
 ## Open questions for chat review
 - (add anything you want to discuss in the Claude chat here)
+- Does sentence-transformers expose bge-m3's sparse output, or does the `gpu` extra need FlagEmbedding?
+- config.yaml still carries "verify current model id" on generation_model (gemini-2.5-flash)
