@@ -4,6 +4,7 @@
 - Milestone: v0.1 (target 2026-10-25)
 - Status: scaffold plus tooling; uv project with ruff and pytest in place, no pipeline code yet
 - Next step: data loaders for MKQA (en/de/fr) and AfriQA (sw)
+- Settled design decisions (data, abstention, judge): docs/design.md
 
 ## Milestones
 - [ ] v0.1 (Oct 25) — data loaders, passage pool, BM25 + dense recall@k for en/de/fr/sw
