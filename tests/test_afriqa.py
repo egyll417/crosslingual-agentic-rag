@@ -1,6 +1,20 @@
 import pytest
 
-from crag.data.afriqa import build_afriqa_questions, parse_answers, row_to_questions
+from crag.data.afriqa import (
+    build_afriqa_questions,
+    parse_answers,
+    recover_answers,
+    row_to_questions,
+)
+
+# The two answer strings in the Swahili test split that ast.literal_eval rejects.
+ROW_75_ANSWER = "['I'm Sprung']"
+ROW_290_ANSWER_EN = (
+    "['bin Laden married Najwa Ghanem at Latakia, Syria; but they were later separated and she "
+    "left Afghanistan on September 9, 2001. Bin Laden's other known wives were Khadijah Sharif "
+    "(married 1983, divorced 1990s); Khairiah Sabar (married 1985); Siham Sabar (married 1987); "
+    "and Amal al-Sadah (married 2000)']"
+)
 
 
 def make_row(question="Je,papa wa roma wa kwanza aliitwa nani?", answers="['Mt Petro']"):
@@ -39,6 +53,29 @@ def test_parse_answers_strips_and_dedupes():
         "Oginga Odinga",
         "Odinga",
     )
+
+
+def test_both_real_unparseable_answers_recover_as_one_answer():
+    assert recover_answers(ROW_75_ANSWER) == ("I'm Sprung",)
+    (answer,) = recover_answers(ROW_290_ANSWER_EN)
+    assert answer.startswith("bin Laden married Najwa Ghanem")
+    assert answer.endswith("and Amal al-Sadah (married 2000)")
+    assert len(answer.split()) == 46
+
+
+def test_parse_answers_falls_back_to_recovery_and_strips():
+    assert parse_answers(ROW_75_ANSWER) == ("I'm Sprung",)
+    assert parse_answers("[' I'm Sprung ']") == ("I'm Sprung",)
+
+
+def test_string_that_looks_like_several_answers_is_an_error():
+    with pytest.raises(ValueError, match="looks like several answers"):
+        recover_answers("['I'm Sprung', 'Bartender']")
+
+
+def test_string_without_the_list_wrapper_is_an_error():
+    with pytest.raises(ValueError, match="unrecognised answer format"):
+        recover_answers("I'm Sprung")
 
 
 def test_row_without_an_english_gold_answer_is_an_error():

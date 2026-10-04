@@ -22,8 +22,13 @@ def recover_answers(raw: str) -> tuple[str, ...]:
     "['I'm Sprung']", makes the string unparseable. Return the recovered answers,
     or raise ValueError if the string should fail the build.
     """
-    # TODO(human): decide what happens to answer strings that do not parse.
-    raise NotImplementedError("AfriQA policy for unparseable answers not written yet")
+    text = raw.strip()
+    if not (text.startswith("['") and text.endswith("']")):
+        raise ValueError(f"unrecognised answer format: {raw!r}")
+    inner = text[2:-2]
+    if "', '" in inner:
+        raise ValueError(f"looks like several answers: {raw!r}")
+    return (inner,)
 
 
 def parse_answers(raw: str) -> tuple[str, ...]:
@@ -31,9 +36,9 @@ def parse_answers(raw: str) -> tuple[str, ...]:
     try:
         values = ast.literal_eval(raw)
     except (ValueError, SyntaxError):
-        return recover_answers(raw)
+        values = None
     if not isinstance(values, list):
-        return recover_answers(raw)
+        values = recover_answers(raw)
     return tuple(dict.fromkeys(v.strip() for v in values if v.strip()))
 
 
