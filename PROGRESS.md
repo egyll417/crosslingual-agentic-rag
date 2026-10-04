@@ -2,9 +2,9 @@
 
 ## Current state
 - Milestone: v0.1 (target 2026-10-25)
-- Status: tooling in place; MKQA loader done with the 500-question sample frozen in git; AfriQA loader
-  scaffolded but not buildable yet (2 of 302 rows wait on `recover_answers`)
-- Next step: the three numbered items under "Next" in the 2026-10-03 log
+- Status: both question loaders are done and their snapshots build: MKQA 500 questions in en/de/fr
+  (1,500 records) and AfriQA Swahili 294 questions in sw/en (588 records). No retrieval code yet.
+- Next step: the passage pool (source and storage still to be decided, see open questions)
 - Settled design decisions (data, abstention, judge): docs/design.md
 
 ## Milestones
@@ -96,11 +96,31 @@ To confirm with IMS before the first GPU install (still waiting on server specs)
   lexical weights or about loading its checkpoint.
 - Finding: FlagEmbedding's own `snapshot_download` does not exclude the repo's `onnx/` export. Pre-download
   bge-m3 with `ignore_patterns=["onnx/*"]` and pass the local path.
+- Done: merged PR #1 (the IMS server checklist and the entries above)
+- Done: items 1 to 3 of the 2026-10-03 "Next" list, and the snapshot half of item 4
+  - `recover_answers` (written by Elliott) recovers only a single-answer `['...']` wrapper and raises
+    otherwise; it recovers all three unparseable strings in the test split (row 75 sw and en, row 290 en)
+  - the MKQA loader builds from `configs/mkqa_sample_ids.txt`; sampling only runs behind
+    `python -m crag.data.mkqa --resample`, which reproduces the tracked file byte for byte with seed 0
+  - the AfriQA loader drops a question (both records) when its English gold answer is longer than 10 words:
+    8 of 302 removed, rows 20, 47, 123, 190, 199, 258, 285 and 290, as the 2026-10-03 probe expected
+- Done: built both snapshots under `data/processed/` (not committed; rebuild with
+  `uv run python -m crag.data.mkqa` and `uv run python -m crag.data.afriqa`)
+  - `mkqa.jsonl`: 1,500 records, 500 each for en/de/fr; by answer type entity 326, date 72, number 39,
+    number_with_unit 34, short_phrase 29; sha256 `a54b37d8e7332bc0905f1674840f45a8f9b714dc15c0f32757143e1be0d7bc5b`
+  - `afriqa_sw.jsonl`: 588 records, 294 each for sw and en; sha256
+    `0b9b7fa964043fc1e68b299802f3d83157dd603295c63cd7bd5033d1476da20c`
+- Results: no evaluation results yet. Test suite: 42 passed; `ruff check` clean.
 - Blockers: IMS server specs (see IMS server checklist); no Hugging Face access from the cloud container
-- Next: the real sparse check (two sentences, `return_sparse=True`) once Hugging Face is reachable, here or
-  on the first IMS node; otherwise the numbered items in the 2026-10-03 log are unchanged
+- Next:
+  1. Passage pool: decide the source and where it is stored, then build it
+  2. BM25 and dense recall@k for en/de/fr/sw on the two snapshots
+  3. The real bge-m3 sparse check (two sentences, `return_sparse=True`) once Hugging Face is reachable from
+     a machine with the `gpu` extra, in the cloud container or on the first IMS node
 
 ## Open questions for chat review
 - (add anything you want to discuss in the Claude chat here)
+- Elliott to check the 8 excluded AfriQA questions (listed in `data/processed/afriqa_sw.manifest.json`
+  after a build)
 - Passage pool source and storage: the AfriQA English Wikipedia pool on the Hub
   (masakhane/afriqa_wiki_en_fr_100, `corpus.jsonl`) is 18.9 GB.
