@@ -2,6 +2,7 @@ import pytest
 
 from crag.data.afriqa import (
     build_afriqa_questions,
+    exclusion_reason,
     parse_answers,
     recover_answers,
     row_to_questions,
@@ -17,14 +18,18 @@ ROW_290_ANSWER_EN = (
 )
 
 
-def make_row(question="Je,papa wa roma wa kwanza aliitwa nani?", answers="['Mt Petro']"):
+def make_row(
+    question="Je,papa wa roma wa kwanza aliitwa nani?",
+    answers="['Mt Petro']",
+    translated_answer="['St Peter']",
+):
     return {
         "question": question,
         "answers": answers,
         "lang": "swa",
         "split": "test",
         "translated_question": "What was the first pope of Rome called?",
-        "translated_answer": "['St Peter']",
+        "translated_answer": translated_answer,
         "translation_type": "human_translation",
     }
 
@@ -86,10 +91,46 @@ def test_row_without_an_english_gold_answer_is_an_error():
 
 def test_build_ids_follow_row_position():
     rows = [make_row(question="swali la kwanza"), make_row(question="swali la pili")]
-    questions = build_afriqa_questions(rows)
+    questions, excluded = build_afriqa_questions(rows)
+    assert excluded == []
     assert [q.id for q in questions] == [
         "afriqa-swa-test-0000-sw",
         "afriqa-swa-test-0000-en",
         "afriqa-swa-test-0001-sw",
         "afriqa-swa-test-0001-en",
     ]
+
+
+def answer_of(words):
+    return str([" ".join(["neno"] * words)])
+
+
+def test_answer_of_ten_words_is_kept_and_eleven_is_excluded():
+    assert exclusion_reason(make_row(translated_answer=answer_of(10))) is None
+    reason = exclusion_reason(make_row(translated_answer=answer_of(11)))
+    assert reason == "English gold answer has 11 words (limit 10)"
+
+
+def test_real_row_290_is_excluded_for_its_46_word_answer():
+    reason = exclusion_reason(make_row(translated_answer=ROW_290_ANSWER_EN))
+    assert reason == "English gold answer has 46 words (limit 10)"
+
+
+def test_question_with_one_short_enough_answer_is_kept():
+    row = make_row(translated_answer=str([" ".join(["neno"] * 12), "neno fupi"]))
+    assert exclusion_reason(row) is None
+
+
+def test_excluded_question_drops_both_records_and_keeps_the_other_ids():
+    rows = [make_row(), make_row(translated_answer=answer_of(11)), make_row()]
+    questions, excluded = build_afriqa_questions(rows)
+    assert [q.id for q in questions] == [
+        "afriqa-swa-test-0000-sw",
+        "afriqa-swa-test-0000-en",
+        "afriqa-swa-test-0002-sw",
+        "afriqa-swa-test-0002-en",
+    ]
+    assert [(entry["id"], entry["answer_words"]) for entry in excluded] == [
+        ("afriqa-swa-test-0001", 11)
+    ]
+    assert excluded[0]["reason"] == "English gold answer has 11 words (limit 10)"

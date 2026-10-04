@@ -49,7 +49,7 @@ is English.
   sources of truth and depends on `random.sample` behaving the same on every Python version.
 
 ### AfriQA (sw)
-- Swahili test split, 302 questions.
+- Swahili test split: 302 questions, of which 294 remain after the exclusion rule below.
 - Each question is emitted twice with one `parallel_id`: the original Swahili (`lang: sw`) and the
   dataset's human English translation (`lang: en`). This is the Swahili control: the same
   questions asked in sw and in en.
@@ -59,14 +59,15 @@ is English.
   survives re-ordering but is opaque, and the revision pin already fixes the order.
 - AfriQA has no answer types, so `answer_type` is empty on these records.
 - Answers are stored as a stringified list (`"['Webuye']"`), and an unescaped apostrophe makes the
-  string unparseable. Decided, not implemented as of 2026-10-03: recover only a single-answer
-  `['...']` wrapper, and fail the build if the inside looks like several answers.
-- Decided, not implemented as of 2026-10-03: a question is dropped entirely (both its sw and en
-  records) if its English gold answer is longer than 10 words (11 or more, counted by splitting
-  on whitespace). This is the same reasoning as
-  MKQA's `long_answer` exclusion: a sentence-length gold answer cannot be string-matched. The
-  build reports how many questions this removes, and the manifest lists each excluded id with its
-  reason.
+  string unparseable. `recover_answers` recovers only a single-answer `['...']` wrapper, and
+  fails the build if the string is not wrapped or the inside looks like several answers.
+- A question is dropped entirely (both its sw and en records) if its English gold answer is
+  longer than 10 words (11 or more, counted by splitting on whitespace). This is the same
+  reasoning as MKQA's `long_answer` exclusion: a sentence-length gold answer cannot be
+  string-matched. If a question has several English answers, it is kept as long as one of them
+  is short enough. The build reports how many questions this removes, and the manifest lists
+  each excluded question with its id and reason.
+- Excluded questions keep their row position, so the ids of the remaining questions do not shift.
 - The AfriQA questions are a different set from the MKQA sample, so sw vs. de/fr differences mix
   language with question difficulty. The sw vs. en control above is the clean comparison.
 

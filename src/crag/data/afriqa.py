@@ -13,6 +13,8 @@ AFRIQA_REPO = "masakhane/afriqa"
 # This is a commit on the Hub's auto-converted refs/convert/parquet branch.
 AFRIQA_REVISION = "8c9e7495b0e14b41d908e08cb1509a985453523f"
 SPLIT = "test"
+# A longer English gold answer is a sentence, not something to string-match in a passage.
+MAX_ANSWER_WORDS = 10
 
 
 def recover_answers(raw: str) -> tuple[str, ...]:
@@ -72,6 +74,20 @@ def row_to_questions(row: dict, parallel_id: str) -> list[Question]:
     ]
 
 
+def answer_words(row: dict) -> int:
+    """Length in words of the shortest English gold answer, 0 if there is none."""
+    answers = parse_answers(row["translated_answer"])
+    return min((len(answer.split()) for answer in answers), default=0)
+
+
+def exclusion_reason(row: dict) -> str | None:
+    """Why this question is left out of the evaluation set, or None to keep it."""
+    words = answer_words(row)
+    if words > MAX_ANSWER_WORDS:
+        return f"English gold answer has {words} words (limit {MAX_ANSWER_WORDS})"
+    return None
+
+
 def load_afriqa_rows(revision: str = AFRIQA_REVISION, split: str = SPLIT):
     from datasets import load_dataset
 
@@ -79,20 +95,52 @@ def load_afriqa_rows(revision: str = AFRIQA_REVISION, split: str = SPLIT):
     return load_dataset(AFRIQA_REPO, revision=revision, data_files=files, split=split)
 
 
-def build_afriqa_questions(rows, split: str = SPLIT) -> list[Question]:
-    # The parquet rows carry no id, so the id is the row's position in the pinned revision.
-    return [
-        question
-        for index, row in enumerate(rows)
-        for question in row_to_questions(row, f"afriqa-swa-{split}-{index:04d}")
-    ]
+def build_afriqa_questions(rows, split: str = SPLIT) -> tuple[list[Question], list[dict]]:
+    """Records for the kept questions, and one entry per excluded question."""
+    questions, excluded = [], []
+    for index, row in enumerate(rows):
+        # The parquet rows carry no id, so the id is the row's position in the pinned revision.
+        # Excluded questions keep their position, so the ids of the others do not shift.
+        parallel_id = f"afriqa-swa-{split}-{index:04d}"
+        reason = exclusion_reason(row)
+        if reason is None:
+            questions.extend(row_to_questions(row, parallel_id))
+        else:
+            excluded.append(
+                {
+                    "id": parallel_id,
+                    "reason": reason,
+                    "question": row["question"],
+                    "question_en": row["translated_question"],
+                    "answers_en": list(parse_answers(row["translated_answer"])),
+                    "answer_words": answer_words(row),
+                }
+            )
+    return questions, excluded
 
 
 def main() -> None:
-    questions = build_afriqa_questions(load_afriqa_rows())
-    meta = {"source": AFRIQA_REPO, "revision": AFRIQA_REVISION, "language": "swa", "split": SPLIT}
+    rows = load_afriqa_rows()
+    questions, excluded = build_afriqa_questions(rows)
+    meta = {
+        "source": AFRIQA_REPO,
+        "revision": AFRIQA_REVISION,
+        "language": "swa",
+        "split": SPLIT,
+        "max_answer_words": MAX_ANSWER_WORDS,
+        "questions_total": len(rows),
+        "questions_kept": len(rows) - len(excluded),
+        "questions_excluded": len(excluded),
+        "excluded": excluded,
+    }
     path = write_snapshot(questions, "data/processed", "afriqa_sw", meta)
     print(f"wrote {len(questions)} records to {path}")
+    print(f"excluded {len(excluded)} of {len(rows)} questions:")
+    for entry in excluded:
+        print(f"  {entry['id']}  ({entry['answer_words']} words)")
+        print(f"    sw: {entry['question']}")
+        print(f"    en: {entry['question_en']}")
+        print(f"    answer: {' | '.join(entry['answers_en'])}")
 
 
 if __name__ == "__main__":
