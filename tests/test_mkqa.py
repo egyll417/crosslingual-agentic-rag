@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -7,10 +8,15 @@ from crag.data.mkqa import (
     ANSWER_TYPES,
     ELIGIBLE_ANSWER_TYPES,
     answer_strings,
+    build_mkqa_questions,
     is_eligible,
+    read_sample_ids,
     row_to_questions,
     select_parallel_sample,
+    write_sample_ids,
 )
+
+TRACKED_SAMPLE_IDS = Path(__file__).parents[1] / "configs" / "mkqa_sample_ids.txt"
 
 
 def make_answer(answer_type="entity", text="Chris Young", aliases=("Christopher Young",)):
@@ -100,6 +106,55 @@ def test_sample_larger_than_eligible_rows_is_an_error():
     rows = [make_row(example_id=str(i)) for i in range(3)]
     with pytest.raises(ValueError, match="only 3 eligible"):
         select_parallel_sample(rows, 4, seed=0)
+
+
+def test_tracked_sample_ids_file_has_500_unique_ids():
+    ids = read_sample_ids(TRACKED_SAMPLE_IDS)
+    assert len(ids) == len(set(ids)) == 500
+
+
+def test_build_selects_the_listed_rows_in_file_order():
+    rows = [make_row(example_id=str(i)) for i in range(5)]
+    questions = build_mkqa_questions(rows, ["3", "1"])
+    assert [q.id for q in questions] == [
+        "mkqa-3-en",
+        "mkqa-3-de",
+        "mkqa-3-fr",
+        "mkqa-1-en",
+        "mkqa-1-de",
+        "mkqa-1-fr",
+    ]
+
+
+def test_sample_id_missing_from_the_dataset_is_an_error():
+    rows = [make_row(example_id=str(i)) for i in range(3)]
+    with pytest.raises(ValueError, match="1 sample ids are not in the dataset"):
+        build_mkqa_questions(rows, ["1", "7"])
+
+
+def test_sample_id_that_is_no_longer_eligible_is_an_error():
+    binary = [make_answer("binary", text="yes", aliases=())]
+    rows = [make_row(example_id="1"), make_row(example_id="2", english=binary)]
+    with pytest.raises(ValueError, match="1 sample ids are no longer eligible"):
+        build_mkqa_questions(rows, ["1", "2"])
+
+
+def test_duplicate_or_missing_ids_in_the_file_are_an_error(tmp_path):
+    path = tmp_path / "ids.txt"
+    path.write_text("1\n2\n1\n")
+    with pytest.raises(ValueError, match="more than once"):
+        read_sample_ids(path)
+    path.write_text("\n")
+    with pytest.raises(ValueError, match="lists no ids"):
+        read_sample_ids(path)
+
+
+def test_resampling_writes_sorted_ids_that_the_loader_reads_back(tmp_path):
+    rows = [make_row(example_id=str(i)) for i in range(20)]
+    path = tmp_path / "ids.txt"
+    ids = write_sample_ids(rows, path, n=5, seed=0)
+    assert len(ids) == 5 and ids == sorted(ids)
+    assert read_sample_ids(path) == ids
 
 
 def test_snapshot_round_trips_and_writes_manifest(tmp_path):

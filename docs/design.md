@@ -40,10 +40,11 @@ is English.
 - The 500 selected `example_id`s are frozen in `configs/mkqa_sample_ids.txt` (one per line, sorted
   as strings), so the evaluation set is fixed in git. They were drawn with seed 0 from revision
   `d7a2b9681ece319c53f8c2fe850eb4b487cec912` of the parquet branch.
-- Decided, not implemented as of 2026-10-03: that file, not the seed, defines the evaluation set.
-  The loader reads the ids, selects exactly those rows in file order, and fails if the file has
-  duplicates, an id is missing from the dataset, or a listed question is no longer eligible.
-  `select_parallel_sample` is kept only to regenerate the file behind an explicit command.
+- That file, not the seed, defines the evaluation set. The loader reads the ids, selects exactly
+  those rows in file order, and fails if the file has duplicates, an id is missing from the
+  dataset, or a listed question is no longer eligible. The manifest records the file's checksum.
+  `select_parallel_sample` is kept only to regenerate the file, behind
+  `python -m crag.data.mkqa --resample`.
   Rejected: sampling at build time and asserting the result equals the file, which keeps two
   sources of truth and depends on `random.sample` behaving the same on every Python version.
 
