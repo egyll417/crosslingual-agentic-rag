@@ -13,6 +13,21 @@
 - [ ] v0.3 (Dec 20) — LangGraph agent, agent-vs-pipeline comparison (accuracy, abstention, latency, cost)
 - [ ] v1.0 (Jan 24) — LLM-judge validation, FastAPI + docker-compose, CI, architecture.md, eval report
 
+## IMS server checklist
+To confirm with IMS before the first GPU install (still waiting on server specs):
+- [ ] GPU model and VRAM
+- [ ] NVIDIA driver ≥ 580: the `gpu` extra locks torch 2.14.1+cu130 (a CUDA 13.0 build); on an older
+      driver torch still imports but `torch.cuda.is_available()` is False
+- [ ] Python 3.12+
+- [ ] Java 21 for pyserini (its JVM side ran on OpenJDK 21 in the 2026-10-04 test install)
+- [ ] Job scheduler
+- [ ] Storage: home-directory quota vs the ~6.3 GB `.venv` from `uv sync --extra gpu` (about 3 GB of
+      CUDA wheels), plus model weights and indexes
+- [ ] Internet on compute nodes (PyPI, Hugging Face Hub)
+- [ ] Docker or Apptainer
+- [ ] Install with `UV_HTTP_TIMEOUT=300 uv sync --extra gpu`: uv's default 30 s timeout failed on a large
+      wheel download over a slow link
+
 ## Log
 ### 2026-10-03
 - Done: added CLAUDE.md and PROGRESS.md; set scope (en/de/fr/sw queries, English knowledge base); vector store set to Qdrant
@@ -64,6 +79,26 @@
      Then show Elliott the excluded questions (id, question, English gold answer, word count) to check.
      A probe on 2026-10-03 expects 8: rows 20, 47, 123, 190, 199, 258, 285 and 290 of the test split.
   4. Then: build both snapshots, and start on the passage pool.
+
+### 2026-10-04
+- Done: first install of the `gpu` extra, in a CPU-only Claude Code cloud container (no GPU). It installs
+  from the existing lock (`uv.lock` unchanged) and all four packages import: torch 2.14.1+cu130,
+  sentence-transformers 6.1.0, FlagEmbedding 1.4.2 (`BGEM3FlagModel`, `FlagReranker`), pyserini 2.4.0
+  (`LuceneSearcher`, `LuceneIndexer`; the JVM starts)
+  - the first attempt failed on uv's default 30 s HTTP timeout; `UV_HTTP_TIMEOUT=300` fixed it
+    (~25 min at ~3.6 MB/s); `.venv` is 6.3 GB
+- Blocked: the bge-m3 sparse check with real weights. The cloud environment's network policy denies
+  huggingface.co.
+- Done: checked the sparse code path offline with a tiny random XLM-R checkpoint laid out like bge-m3
+  (`colbert_linear.pt`, `sparse_linear.pt`). Under transformers 5.18, `encode(..., return_sparse=True)`
+  returns `lexical_weights` (one token id → weight dict per sentence), and `convert_id_to_token` and
+  `compute_lexical_matching_score` work. The weights are random, so this says nothing about bge-m3's real
+  lexical weights or about loading its checkpoint.
+- Finding: FlagEmbedding's own `snapshot_download` does not exclude the repo's `onnx/` export. Pre-download
+  bge-m3 with `ignore_patterns=["onnx/*"]` and pass the local path.
+- Blockers: IMS server specs (see IMS server checklist); no Hugging Face access from the cloud container
+- Next: the real sparse check (two sentences, `return_sparse=True`) once Hugging Face is reachable, here or
+  on the first IMS node; otherwise the numbered items in the 2026-10-03 log are unchanged
 
 ## Open questions for chat review
 - (add anything you want to discuss in the Claude chat here)
