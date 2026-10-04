@@ -77,6 +77,25 @@ is English.
 - Each loader writes a normalised JSONL snapshot and a manifest (source, revision, seed, counts,
   checksum) under `data/processed/`. `data/` is not committed.
 
+## Retrieval metric
+- recall@k is answer recall (DPR's top-k retrieval accuracy): the fraction of questions with at
+  least one English gold answer (`answers_en`) in the top k passages. The evaluation sets have no
+  gold passage labels, so passage-level recall is not available.
+- Matching is on normalized text, as whole words: `normalize` applies NFKC, lowercases, turns
+  every character that is not a letter, number or combining mark into a space, and collapses
+  whitespace. An answer matches if its words appear as a contiguous run of whole words in the
+  passage, so `2` does not match `2016`. An answer that normalizes to nothing never matches.
+- Punctuation becomes a space, as in the DPR tokenizer behind Pyserini's DPR retrieval evaluation,
+  so `Smith's` still contains `Smith` and `2016–2017` still contains `2017`.
+  Rejected: deleting punctuation (SQuAD-style), which is built to compare two answer strings, not
+  to search passages; it glues `2016–2017` into `20162017` and only knows ASCII punctuation.
+  Known cost, shared with DPR: `1,000` does not match `1000`, and `U.S.` does not match `US`.
+  To revisit once the number answers in the MKQA snapshot have been checked.
+- Diacritics and articles are kept. Pyserini's implementation is not used because it is in the
+  Linux-only `gpu` extra; it can serve as a cross-check on the GPU servers.
+- Each question's first-hit rank is computed once and stored per question; recall@k for every k
+  comes from those ranks, and they feed the failure attribution.
+
 ## Abstention
 - Abstention is evaluated on its own controlled set, built at v0.3: answerable questions whose
   gold-containing passages are deleted from the pool. That is the only way to know for certain that
