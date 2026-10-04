@@ -1,5 +1,7 @@
 # crosslingual-agentic-rag
 
+[![CI](https://github.com/egyll417/crosslingual-agentic-rag/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/egyll417/crosslingual-agentic-rag/actions/workflows/ci.yml)
+
 Users ask in English, German, French or Swahili; the knowledge base is in English.
 This repo builds a retrieval-augmented QA system with an agent loop, plus an evaluation harness
 that measures **where answers get lost** (retrieval, reranking or generation) and **what the agent
