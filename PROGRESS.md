@@ -7,13 +7,15 @@
   `docs/design.md` have been **removed** (recoverable from git history), and `pyproject.toml`/`uv.lock`
   pruned (dropped langgraph + pyserini, sentence-transformers now only transitive via flagembedding;
   added faster-whisper for CPU ASR).
-- Status: no SD-QA code yet. Phase 1 is the SD-QA Swahili loader, then ASR (WER/CER); GPU work
-  (bge-m3 encode, retrieval) waits on IMS.
-- Next step: SD-QA Swahili data loader — both varieties, map each clip to its TyDi question + gold
-  answer/passage, define the eval set (gold passage AND recordings in both varieties), print real counts.
+- Status: **SD-QA Swahili loader done** (`src/crag/data/sdqa.py`) — eval set is **845 questions**
+  (answerable AND recorded in both varieties), of which 776 have a minimal answer. ASR (WER/CER) is next;
+  GPU work (bge-m3 encode, retrieval) waits on IMS.
+- Next step: CPU ASR — run faster-whisper large-v3 (lang=sw) on the `wav_swa/` recordings; WER/CER vs the
+  read reference, by variety × ASR system (Whisper vs the shipped Google transcripts). Runs on the cloud
+  container / IMS (Linux), not the Intel Mac.
 
 ## Milestones (reset 2026-11-22)
-- [ ] P1 (now → mid-Dec) — SD-QA Swahili loader + ASR (faster-whisper vs Google); WER/CER by variety × system. **CPU only.**
+- [~] P1 (now → mid-Dec) — SD-QA Swahili loader **[done]** + ASR (faster-whisper vs Google); WER/CER by variety × system. **CPU only.**
 - [ ] P2 (mid-Dec) — Swahili Wikipedia passage pool; bge-m3 dense encode; retrieval recall@k for the 5 conditions. **Needs IMS GPU.**
 - [ ] P3 (Jan) — Gemini generation; LLM judge; per-question failure attribution.
 - [ ] P4 (Feb–Apr) — ~200 hand labels; judge agreement (Cohen's kappa); final analysis; report + talk.
@@ -34,6 +36,28 @@ To confirm with IMS before the first GPU install (still waiting on server specs)
       wheel download over a slow link
 
 ## Log
+### 2026-11-24 — SD-QA Swahili loader (Phase 1, step 1)
+- Done: `src/crag/data/sdqa.py` + `tests/test_sdqa.py`. Fetches the Swahili `test` split from GitHub
+  (ffaisal93/SD-QA) at a pinned commit (`c49e9eb`) via the raw CDN — HF is blocked in this container but
+  SD-QA's data is committed in the repo, so no HF needed. Files cached under `data/raw/sdqa/<sha>/`.
+- Design: the per-dialect `*-ASR*.jsonl.gz` are TyDi *primary-task* format. Gold passage/answer are
+  reconstructed from `annotations` (plurality passage index; minimal-answer byte spans into
+  `document_plaintext`, UTF-8 byte-indexed). Gold *written* question comes from `swahili.test.csv`
+  (`swahili-gold`); the jsonl `question_text` is the Google ASR transcript. Eval set = answerable (has a
+  gold passage) AND recorded in both varieties. New `SDQAItem` record (gold Q/A/passage + the 4 Google
+  transcripts per condition); reuses `io.write_snapshot`. `wav_swa/` audio is committed but not fetched
+  here (needed only for the faster-whisper WER step).
+- Real counts (pinned `c49e9eb`, not committed — `data/` is gitignored):
+  total test questions 2383; recorded in both varieties 2322; answerable 861; **eval set 845**
+  (776 with a minimal answer, 69 passage-only incl. yes/no); gold-question join clean (0 missing).
+  Recordings per condition: kenya-sw-{KE,TZ} 2375, tanzania-sw-{KE,TZ} 2330.
+  Google ASR ran at both locales (sw-KE, sw-TZ) per variety → 4 transcript conditions.
+- Split note: SD-QA `test` = TyDi *dev* (no spoken training data).
+- Verified: `ruff check` clean; `pytest` 13 passed (5 smoke + 8 sdqa); live `main()` wrote
+  `data/processed/sdqa_sw_test.jsonl` (845 records) + manifest.
+- Rebuild: `SSL_CERT_FILE=/root/.ccr/ca-bundle.crt uv run python -m crag.data.sdqa` (cloud; drop the env
+  var off-proxy). Next: CPU ASR (faster-whisper).
+
 ### 2026-11-22 — scope reset to monolingual Swahili (SD-QA)
 - Why: the old design asked AfriQA Swahili questions over English Wikipedia with SD-QA audio, but SD-QA
   records **TyDi-QA** questions, not AfriQA's — the question sets are disjoint, so AfriQA questions had no
