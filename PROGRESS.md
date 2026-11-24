@@ -1,17 +1,23 @@
 # Progress
 
 ## Current state
-- Milestone: v0.1 (target 2026-10-25)
-- Status: both question loaders are done and their snapshots build: MKQA 500 questions in en/de/fr
-  (1,500 records) and AfriQA Swahili 294 questions in sw/en (588 records). No retrieval code yet.
-- Next step: the passage pool (source and storage still to be decided, see open questions)
-- Settled design decisions (data, abstention, judge): docs/design.md
+- **Scope reset 2026-11-22 (see ORP_SCOPE.md):** collapsed to one monolingual Swahili module. The old
+  cross-lingual design, MKQA, AfriQA, English Wikipedia, the LangGraph agent, the reranker and
+  BM25/Pyserini are dropped. The MKQA/AfriQA loaders, their tests, the `agent` package and
+  `docs/design.md` have been **removed** (recoverable from git history), and `pyproject.toml`/`uv.lock`
+  pruned (dropped langgraph + pyserini, sentence-transformers now only transitive via flagembedding;
+  added faster-whisper for CPU ASR).
+- Status: SD-QA loader + eval set (845 Q) done; ASR WER/CER metrics + **Google-side WER done**
+  (`src/crag/asr/`). faster-whisper wrapper written + unit-tested but not yet run — its model weights
+  come from HF, blocked in this container, so Whisper transcription runs on IMS (or a Linux host with HF).
+- Next step: run faster-whisper large-v3 (lang=sw) on the `wav_swa/` recordings on IMS to get the Whisper
+  WER/CER and the Whisper pipeline condition; then Phase 2 (Swahili Wikipedia pool, bge-m3) on IMS GPU.
 
-## Milestones
-- [ ] v0.1 (Oct 25) — data loaders, passage pool, BM25 + dense recall@k for en/de/fr/sw
-- [ ] v0.2 (Nov 22) — hybrid retrieval + reranker, generation with citations, failure-attribution chart
-- [ ] v0.3 (Dec 20) — LangGraph agent, agent-vs-pipeline comparison (accuracy, abstention, latency, cost)
-- [ ] v1.0 (Jan 24) — LLM-judge validation, FastAPI + docker-compose, CI, architecture.md, eval report
+## Milestones (reset 2026-11-22)
+- [~] P1 (now → mid-Dec) — loader **[done]**, Google WER **[done]**, faster-whisper WER **[pending IMS]**; WER/CER by variety × system. **CPU only.**
+- [ ] P2 (mid-Dec) — Swahili Wikipedia passage pool; bge-m3 dense encode; retrieval recall@k for the 5 conditions. **Needs IMS GPU.**
+- [ ] P3 (Jan) — Gemini generation; LLM judge; per-question failure attribution.
+- [ ] P4 (Feb–Apr) — ~200 hand labels; judge agreement (Cohen's kappa); final analysis; report + talk.
 
 ## IMS server checklist
 To confirm with IMS before the first GPU install (still waiting on server specs):
@@ -19,7 +25,7 @@ To confirm with IMS before the first GPU install (still waiting on server specs)
 - [ ] NVIDIA driver ≥ 580: the `gpu` extra locks torch 2.14.1+cu130 (a CUDA 13.0 build); on an older
       driver torch still imports but `torch.cuda.is_available()` is False
 - [ ] Python 3.12+
-- [ ] Java 21 for pyserini (its JVM side ran on OpenJDK 21 in the 2026-10-04 test install)
+      <!-- Java 21 / pyserini line dropped on the 2026-11-22 scope reset: BM25/Pyserini is cut. -->
 - [ ] Job scheduler
 - [ ] Storage: home-directory quota vs the ~6.3 GB `.venv` from `uv sync --extra gpu` (about 3 GB of
       CUDA wheels), plus model weights and indexes
@@ -29,6 +35,63 @@ To confirm with IMS before the first GPU install (still waiting on server specs)
       wheel download over a slow link
 
 ## Log
+### 2026-11-24 — ASR metrics + Google WER (Phase 1, step 2 part 1); repo tidy
+- Done: `src/crag/asr/` — `metrics.py` (WER/CER: own Levenshtein + normalisation, dep-free; rejected
+  jiwer to keep Swahili normalisation explicit), `transcribe.py` (faster-whisper wrapper, lazy import,
+  disk-cached, model injected for testing), `evaluate.py` (WER/CER by condition over the snapshot,
+  writes a result file). Tests in `tests/test_asr.py`.
+- Result (Google ASR vs the gold written question = the read reference, over the 845 eval questions,
+  micro-averaged; `data/processed/asr_google_wer.json`, not committed):
+  **kenya WER 0.330 / CER 0.182; tanzania WER 0.408 / CER 0.238.** Tanzanian speech is ~8 WER points
+  harder for Google — a real Kenya/Tanzania gap, to re-check once Whisper lands.
+- Finding: SD-QA's two Google locales (sw-KE, sw-TZ) are **identical for Swahili** (845/845 per variety,
+  0 disagreements), so the loader now stores one Google transcript per variety, not four. The 5 scope
+  conditions hold: text + {kenya, tanzania} × {Whisper, Google}.
+- Blocked here: faster-whisper transcription — its large-v3 weights download from HF (blocked in this
+  container) and it is Linux-only (no Intel-macOS wheel). Runs on IMS / a Linux host with HF access.
+- Repo tidy: removed the empty placeholder packages `src/crag/{eval,generate,ingest,retrieve}/`
+  (recreated when real code lands); kept `data/`, added `asr/`. Smoke test now covers `asr`, `data`.
+- Verified: `ruff check` clean; `pytest` 20 passed (2 smoke + 9 sdqa + 9 asr).
+
+### 2026-11-24 — SD-QA Swahili loader (Phase 1, step 1)
+- Done: `src/crag/data/sdqa.py` + `tests/test_sdqa.py`. Fetches the Swahili `test` split from GitHub
+  (ffaisal93/SD-QA) at a pinned commit (`c49e9eb`) via the raw CDN — HF is blocked in this container but
+  SD-QA's data is committed in the repo, so no HF needed. Files cached under `data/raw/sdqa/<sha>/`.
+- Design: the per-dialect `*-ASR*.jsonl.gz` are TyDi *primary-task* format. Gold passage/answer are
+  reconstructed from `annotations` (plurality passage index; minimal-answer byte spans into
+  `document_plaintext`, UTF-8 byte-indexed). Gold *written* question comes from `swahili.test.csv`
+  (`swahili-gold`); the jsonl `question_text` is the Google ASR transcript. Eval set = answerable (has a
+  gold passage) AND recorded in both varieties. New `SDQAItem` record (gold Q/A/passage + the 4 Google
+  transcripts per condition); reuses `io.write_snapshot`. `wav_swa/` audio is committed but not fetched
+  here (needed only for the faster-whisper WER step).
+- Real counts (pinned `c49e9eb`, not committed — `data/` is gitignored):
+  total test questions 2383; recorded in both varieties 2322; answerable 861; **eval set 845**
+  (776 with a minimal answer, 69 passage-only incl. yes/no); gold-question join clean (0 missing).
+  Recordings per condition: kenya-sw-{KE,TZ} 2375, tanzania-sw-{KE,TZ} 2330.
+  Google ASR ran at both locales (sw-KE, sw-TZ) per variety → 4 transcript conditions.
+- Split note: SD-QA `test` = TyDi *dev* (no spoken training data).
+- Verified: `ruff check` clean; `pytest` 13 passed (5 smoke + 8 sdqa); live `main()` wrote
+  `data/processed/sdqa_sw_test.jsonl` (845 records) + manifest.
+- Rebuild: `SSL_CERT_FILE=/root/.ccr/ca-bundle.crt uv run python -m crag.data.sdqa` (cloud; drop the env
+  var off-proxy). Next: CPU ASR (faster-whisper).
+
+### 2026-11-22 — scope reset to monolingual Swahili (SD-QA)
+- Why: the old design asked AfriQA Swahili questions over English Wikipedia with SD-QA audio, but SD-QA
+  records **TyDi-QA** questions, not AfriQA's — the question sets are disjoint, so AfriQA questions had no
+  recordings and the speech path was not runnable. Rebuilding entirely on SD-QA aligns text and speech on
+  the same questions; TyDi Swahili answers are grounded in Swahili Wikipedia, so the KB is Swahili.
+- Done: wrote ORP_SCOPE.md (source of truth); rewrote CLAUDE.md, README.md and `configs/config.yaml`,
+  and reset the Current state / Milestones above, to the single-module scope.
+- Out of scope now (recoverable from git history): MKQA, AfriQA, English Wikipedia, cross-lingual/
+  translation routing, LangGraph agent, reranker, BM25/Pyserini, Qdrant server, FastAPI + docker.
+- Done in the reset: deleted `src/crag/data/{mkqa,afriqa}.py` + their tests, `configs/mkqa_sample_ids.txt`,
+  the empty `src/crag/agent/` package (dropped from the smoke test), and `docs/design.md`; pruned
+  `pyproject.toml`/`uv.lock` (dropped langgraph + pyserini + the direct sentence-transformers dep; added
+  faster-whisper). `src/crag/data/{io,schema}.py` kept — reused by the SD-QA loader.
+- Verified: `ruff check` clean, `pytest` 5 passed (subpackage import smoke test).
+- Next: SD-QA Swahili loader (Phase 1, step 1), then CPU ASR (step 2). Note: huggingface.co was blocked
+  in this cloud container on 2026-10-04 — confirm SD-QA download access before building the loader.
+
 ### 2026-10-03
 - Done: added CLAUDE.md and PROGRESS.md; set scope (en/de/fr/sw queries, English knowledge base); vector store set to Qdrant
 - Done: configs/config.yaml aligned with the stack (vector_store: qdrant, languages: en/de/fr/sw)
@@ -120,7 +183,12 @@ To confirm with IMS before the first GPU install (still waiting on server specs)
 
 ## Open questions for chat review
 - (add anything you want to discuss in the Claude chat here)
-- Elliott to check the 8 excluded AfriQA questions (listed in `data/processed/afriqa_sw.manifest.json`
-  after a build)
-- Passage pool source and storage: the AfriQA English Wikipedia pool on the Hub
-  (masakhane/afriqa_wiki_en_fr_100, `corpus.jsonl`) is 18.9 GB.
+- SD-QA access + format: exact source (HF repo / GitHub release), the field names linking a clip to its
+  TyDi question + gold answer/passage, and whether the cloud container can download it (huggingface.co was
+  blocked here on 2026-10-04). Confirm the real eval-set count (questions with a gold passage AND
+  recordings in both varieties) — do not reuse the old AfriQA numbers.
+- Swahili Wikipedia passage pool: dump/source and how distractors are sampled (Phase 2).
+
+<!-- Resolved by the 2026-11-22 reset: the old AfriQA/English-Wikipedia passage-pool question (the 18.9 GB
+masakhane/afriqa_wiki_en_fr_100 corpus) is moot — the KB is now Swahili Wikipedia. -->
+

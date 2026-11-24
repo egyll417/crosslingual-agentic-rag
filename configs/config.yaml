@@ -1,7 +1,9 @@
-embedding_model: BAAI/bge-m3
-reranker_model: BAAI/bge-reranker-v2-m3
-vector_store: qdrant
-languages: [en, de, fr, sw]
-generation_model: gemini-2.5-flash   # verify current model id in AI Studio
-top_k: 20
-rerank_top_k: 5
+# SD-QA Swahili, monolingual. See ORP_SCOPE.md.
+asr_model: large-v3                   # faster-whisper, lang=sw; plus SD-QA's shipped Google transcripts
+embedding_model: BAAI/bge-m3          # dense only, no reranker
+vector_store: qdrant                  # local mode (no server)
+generation_model: gemini-2.5-flash    # verify current model id in AI Studio
+judge_model: gemini-2.5-pro           # a different Gemini model; verify current model id in AI Studio
+language: sw
+varieties: [kenya, tanzania]
+top_k: 5
