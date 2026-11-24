@@ -2,7 +2,7 @@ import importlib
 
 import pytest
 
-SUBPACKAGES = ["data", "eval", "generate", "ingest", "retrieve"]
+SUBPACKAGES = ["asr", "data"]
 
 
 @pytest.mark.parametrize("name", SUBPACKAGES)

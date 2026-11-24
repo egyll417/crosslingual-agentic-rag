@@ -106,11 +106,12 @@ def test_build_eval_set_keeps_answerable_questions_recorded_in_both_varieties():
         2: Gold("T2", 0, "Passage 2", ("jibu",), "NONE"),
         3: None,  # unanswerable
     }
+    # The two Google locales are identical per variety (as in the real data).
     transcripts = {
-        "kenya-sw-KE": {1: "k-ke-1", 2: "k-ke-2", 3: "k-ke-3"},
-        "kenya-sw-TZ": {1: "k-tz-1", 2: "k-tz-2", 3: "k-tz-3"},
-        "tanzania-sw-KE": {1: "t-ke-1", 3: "t-ke-3"},  # id 2 has no Tanzanian recording
-        "tanzania-sw-TZ": {1: "t-tz-1", 3: "t-tz-3"},
+        "kenya-sw-KE": {1: "ke-1", 2: "ke-2", 3: "ke-3"},
+        "kenya-sw-TZ": {1: "ke-1", 2: "ke-2", 3: "ke-3"},
+        "tanzania-sw-KE": {1: "tz-1", 3: "tz-3"},  # id 2 has no Tanzanian recording
+        "tanzania-sw-TZ": {1: "tz-1", 3: "tz-3"},
     }
     gold_questions = {1: "Swali la kwanza?", 2: "Swali la pili?", 3: "Swali la tatu?"}
 
@@ -121,12 +122,7 @@ def test_build_eval_set_keeps_answerable_questions_recorded_in_both_varieties():
     assert item.gold_question == "Swali la kwanza?"
     assert item.gold_passage == "Passage 1"
     assert item.varieties == ("kenya", "tanzania")
-    assert item.google_transcripts == {
-        "kenya-sw-KE": "k-ke-1",
-        "kenya-sw-TZ": "k-tz-1",
-        "tanzania-sw-KE": "t-ke-1",
-        "tanzania-sw-TZ": "t-tz-1",
-    }
+    assert item.google_transcripts == {"kenya": "ke-1", "tanzania": "tz-1"}  # collapsed per variety
     assert counts == {
         "questions_total": 3,
         "recorded_both_varieties": 2,  # ids 1 and 3
@@ -134,7 +130,21 @@ def test_build_eval_set_keeps_answerable_questions_recorded_in_both_varieties():
         "eval_set": 1,
         "eval_set_with_minimal_answer": 1,
         "eval_set_missing_gold_question": 0,
+        "google_locale_disagreements": 0,
     }
+
+
+def test_build_eval_set_counts_a_disagreement_between_google_locales():
+    gold_by_id = {1: Gold("T1", 0, "Passage 1", ("jibu",), "NONE")}
+    transcripts = {
+        "kenya-sw-KE": {1: "a"},
+        "kenya-sw-TZ": {1: "b"},  # locales differ for Kenya
+        "tanzania-sw-KE": {1: "c"},
+        "tanzania-sw-TZ": {1: "c"},
+    }
+    items, counts = build_eval_set(gold_by_id, transcripts, gold_questions={1: "Swali?"})
+    assert counts["google_locale_disagreements"] == 1
+    assert items[0].google_transcripts["kenya"] == "a"  # first locale (sw-KE) wins
 
 
 def test_build_eval_set_counts_a_missing_gold_question_but_keeps_the_item():

@@ -75,7 +75,7 @@ class SDQAItem:
     gold_passage_index: int  # index into the article's passage_answer_candidates
     gold_answers: tuple[str, ...]  # minimal answers from annotators, deduped (may be empty)
     yes_no_answer: str  # NONE / YES / NO
-    google_transcripts: dict[str, str]  # {"kenya-sw-KE": transcript, ...}
+    google_transcripts: dict[str, str]  # {"kenya": transcript, "tanzania": transcript}
     varieties: tuple[str, ...]  # speaker varieties with a recording
     lang: str = "sw"
     source: str = "sdqa"
@@ -145,29 +145,35 @@ def build_eval_set(
     """
     all_ids = set().union(*(t.keys() for t in transcripts.values())) if transcripts else set()
 
-    def transcripts_for(example_id: int) -> dict[str, str]:
-        out = {}
-        for variety in VARIETIES:
-            for locale in LOCALES:
-                text = transcripts.get(condition(variety, locale), {}).get(example_id)
-                if text is not None:
-                    out[condition(variety, locale)] = text
-        return out
-
-    def varieties_of(by_condition: dict[str, str]) -> set[str]:
-        return {cond.split("-", 1)[0] for cond in by_condition}
+    def present_varieties(example_id: int) -> set[str]:
+        return {
+            variety
+            for variety in VARIETIES
+            for locale in LOCALES
+            if example_id in transcripts.get(condition(variety, locale), {})
+        }
 
     items: list[SDQAItem] = []
-    n_both = n_answerable = n_missing_question = 0
+    n_both = n_answerable = n_missing_question = n_locale_disagreements = 0
     for example_id in sorted(all_ids):
-        item_transcripts = transcripts_for(example_id)
-        varieties = varieties_of(item_transcripts)
+        varieties = present_varieties(example_id)
         both = set(VARIETIES) <= varieties
         gold = gold_by_id.get(example_id)
         n_both += int(both)
         n_answerable += int(gold is not None)
         if not (both and gold is not None):
             continue
+        # The two Google locales (sw-KE, sw-TZ) are identical for Swahili, so collapse to one
+        # transcript per variety; count any disagreement in case that ever stops holding.
+        google: dict[str, str] = {}
+        for variety in sorted(varieties):
+            texts = [
+                transcripts[condition(variety, locale)][example_id]
+                for locale in LOCALES
+                if example_id in transcripts.get(condition(variety, locale), {})
+            ]
+            n_locale_disagreements += int(len(set(texts)) > 1)
+            google[variety] = texts[0]
         question = gold_questions.get(example_id, "")
         if not question:
             n_missing_question += 1
@@ -180,7 +186,7 @@ def build_eval_set(
                 gold_passage_index=gold.passage_index,
                 gold_answers=gold.answers,
                 yes_no_answer=gold.yes_no_answer,
-                google_transcripts=item_transcripts,
+                google_transcripts=google,
                 varieties=tuple(sorted(varieties)),
             )
         )
@@ -191,6 +197,7 @@ def build_eval_set(
         "eval_set": len(items),
         "eval_set_with_minimal_answer": sum(1 for i in items if i.gold_answers),
         "eval_set_missing_gold_question": n_missing_question,
+        "google_locale_disagreements": n_locale_disagreements,
     }
     return items, counts
 

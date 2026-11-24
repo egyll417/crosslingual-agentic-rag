@@ -7,15 +7,14 @@
   `docs/design.md` have been **removed** (recoverable from git history), and `pyproject.toml`/`uv.lock`
   pruned (dropped langgraph + pyserini, sentence-transformers now only transitive via flagembedding;
   added faster-whisper for CPU ASR).
-- Status: **SD-QA Swahili loader done** (`src/crag/data/sdqa.py`) — eval set is **845 questions**
-  (answerable AND recorded in both varieties), of which 776 have a minimal answer. ASR (WER/CER) is next;
-  GPU work (bge-m3 encode, retrieval) waits on IMS.
-- Next step: CPU ASR — run faster-whisper large-v3 (lang=sw) on the `wav_swa/` recordings; WER/CER vs the
-  read reference, by variety × ASR system (Whisper vs the shipped Google transcripts). Runs on the cloud
-  container / IMS (Linux), not the Intel Mac.
+- Status: SD-QA loader + eval set (845 Q) done; ASR WER/CER metrics + **Google-side WER done**
+  (`src/crag/asr/`). faster-whisper wrapper written + unit-tested but not yet run — its model weights
+  come from HF, blocked in this container, so Whisper transcription runs on IMS (or a Linux host with HF).
+- Next step: run faster-whisper large-v3 (lang=sw) on the `wav_swa/` recordings on IMS to get the Whisper
+  WER/CER and the Whisper pipeline condition; then Phase 2 (Swahili Wikipedia pool, bge-m3) on IMS GPU.
 
 ## Milestones (reset 2026-11-22)
-- [~] P1 (now → mid-Dec) — SD-QA Swahili loader **[done]** + ASR (faster-whisper vs Google); WER/CER by variety × system. **CPU only.**
+- [~] P1 (now → mid-Dec) — loader **[done]**, Google WER **[done]**, faster-whisper WER **[pending IMS]**; WER/CER by variety × system. **CPU only.**
 - [ ] P2 (mid-Dec) — Swahili Wikipedia passage pool; bge-m3 dense encode; retrieval recall@k for the 5 conditions. **Needs IMS GPU.**
 - [ ] P3 (Jan) — Gemini generation; LLM judge; per-question failure attribution.
 - [ ] P4 (Feb–Apr) — ~200 hand labels; judge agreement (Cohen's kappa); final analysis; report + talk.
@@ -36,6 +35,24 @@ To confirm with IMS before the first GPU install (still waiting on server specs)
       wheel download over a slow link
 
 ## Log
+### 2026-11-24 — ASR metrics + Google WER (Phase 1, step 2 part 1); repo tidy
+- Done: `src/crag/asr/` — `metrics.py` (WER/CER: own Levenshtein + normalisation, dep-free; rejected
+  jiwer to keep Swahili normalisation explicit), `transcribe.py` (faster-whisper wrapper, lazy import,
+  disk-cached, model injected for testing), `evaluate.py` (WER/CER by condition over the snapshot,
+  writes a result file). Tests in `tests/test_asr.py`.
+- Result (Google ASR vs the gold written question = the read reference, over the 845 eval questions,
+  micro-averaged; `data/processed/asr_google_wer.json`, not committed):
+  **kenya WER 0.330 / CER 0.182; tanzania WER 0.408 / CER 0.238.** Tanzanian speech is ~8 WER points
+  harder for Google — a real Kenya/Tanzania gap, to re-check once Whisper lands.
+- Finding: SD-QA's two Google locales (sw-KE, sw-TZ) are **identical for Swahili** (845/845 per variety,
+  0 disagreements), so the loader now stores one Google transcript per variety, not four. The 5 scope
+  conditions hold: text + {kenya, tanzania} × {Whisper, Google}.
+- Blocked here: faster-whisper transcription — its large-v3 weights download from HF (blocked in this
+  container) and it is Linux-only (no Intel-macOS wheel). Runs on IMS / a Linux host with HF access.
+- Repo tidy: removed the empty placeholder packages `src/crag/{eval,generate,ingest,retrieve}/`
+  (recreated when real code lands); kept `data/`, added `asr/`. Smoke test now covers `asr`, `data`.
+- Verified: `ruff check` clean; `pytest` 20 passed (2 smoke + 9 sdqa + 9 asr).
+
 ### 2026-11-24 — SD-QA Swahili loader (Phase 1, step 1)
 - Done: `src/crag/data/sdqa.py` + `tests/test_sdqa.py`. Fetches the Swahili `test` split from GitHub
   (ffaisal93/SD-QA) at a pinned commit (`c49e9eb`) via the raw CDN — HF is blocked in this container but
