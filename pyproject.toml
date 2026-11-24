@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "datasets>=5.0.1",
+    "faster-whisper>=1.2.0",
     "google-genai>=2.28.0",
-    "langgraph>=1.2.12",
     "python-dotenv>=1.2.4",
     "qdrant-client>=1.19.1",
 ]
@@ -15,10 +15,9 @@ dependencies = [
 [project.optional-dependencies]
 # Heavy ML stack for the Linux GPU servers only: `uv sync --extra gpu`.
 # Current PyTorch has no Intel-Mac builds, so these must never be required locally.
+# Scope reset 2026-11-22: dense-only bge-m3; pyserini (BM25) and sentence-transformers dropped.
 gpu = [
     "flagembedding>=1.4.2 ; sys_platform == 'linux'",
-    "pyserini>=2.4.0 ; sys_platform == 'linux'",
-    "sentence-transformers>=6.1.0 ; sys_platform == 'linux'",
     "torch>=2.14.1 ; sys_platform == 'linux'",
 ]
 
