@@ -6,10 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "datasets>=5.0.1",
-    "faster-whisper>=1.2.0",
     "google-genai>=2.28.0",
     "python-dotenv>=1.2.4",
     "qdrant-client>=1.19.1",
+    # faster-whisper (CPU ASR) is Linux-only: its onnxruntime dep ships no Intel-macOS
+    # (x86_64) wheel, so ASR runs on the cloud container / IMS, never the Intel Mac.
+    "faster-whisper>=1.2.0 ; sys_platform == 'linux'",
 ]
 
 [project.optional-dependencies]
